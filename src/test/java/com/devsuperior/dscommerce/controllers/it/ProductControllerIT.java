@@ -13,11 +13,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.result.MockMvcResultHandlers;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,6 +35,7 @@ public class ProductControllerIT {
     @Autowired
     private ObjectMapper objectMapper;
 
+    private Long existingProductId, nonExistingProductId, dependentProductId;
     private String clientUsername, clientPassword, adminUsername, adminPassword;
     private String adminToken, clientToken, invalidToken;
 
@@ -52,6 +53,10 @@ public class ProductControllerIT {
         adminPassword = "123456";
 
         productName = "Macbook";
+
+        existingProductId = 2L;
+        nonExistingProductId = 100L;
+        dependentProductId = 3L;
 
         adminToken = tokenUtil.obtainAccessToken(mockMvc, adminUsername, adminPassword);
         clientToken = tokenUtil.obtainAccessToken(mockMvc, clientUsername, clientPassword);
@@ -109,5 +114,169 @@ public class ProductControllerIT {
         result.andExpect(jsonPath("$.price").value(3999.90));
         result.andExpect(jsonPath("$.imgUrl").value("url.com.br/232344"));
         result.andExpect(jsonPath("$.categories[0].id").value(2L));
+    }
+
+    @Test
+    public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndInvalidName() throws Exception {
+
+        product.setName("ba");
+        productDTO = new ProductDTO(product);
+
+        String jsonBody = objectMapper.writeValueAsString(productDTO);
+
+        ResultActions result = mockMvc.perform(post("/products")
+                .header("Authorization", "Bearer " + adminToken)
+                .content(jsonBody)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndInvalidDescription() throws Exception {
+
+        product.setDescription("desc");
+        productDTO = new ProductDTO(product);
+
+        String jsonBody = objectMapper.writeValueAsString(productDTO);
+
+        ResultActions result = mockMvc.perform(post("/products")
+                .header("Authorization", "Bearer " + adminToken)
+                .content(jsonBody)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndPriceIsNegative() throws Exception {
+
+        product.setPrice(-50.0);
+        productDTO = new ProductDTO(product);
+
+        String jsonBody = objectMapper.writeValueAsString(productDTO);
+
+        ResultActions result = mockMvc.perform(post("/products")
+                .header("Authorization", "Bearer " + adminToken)
+                .content(jsonBody)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndPriceIsZero() throws Exception {
+
+        product.setPrice(0.0);
+        productDTO = new ProductDTO(product);
+
+        String jsonBody = objectMapper.writeValueAsString(productDTO);
+
+        ResultActions result = mockMvc.perform(post("/products")
+                .header("Authorization", "Bearer " + adminToken)
+                .content(jsonBody)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndProductHasNotCategory() throws Exception {
+
+        product.getCategories().clear();
+        productDTO = new ProductDTO(product);
+
+        String jsonBody = objectMapper.writeValueAsString(productDTO);
+
+        ResultActions result = mockMvc.perform(post("/products")
+                .header("Authorization", "Bearer " + adminToken)
+                .content(jsonBody)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    public void insertShouldReturnForbiddenWhenClientLogged() throws Exception {
+
+        String jsonBody = objectMapper.writeValueAsString(productDTO);
+
+        ResultActions result = mockMvc.perform(post("/products")
+                .header("Authorization", "Bearer " + clientToken)
+                .content(jsonBody)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isForbidden());
+    }
+
+    @Test
+    public void insertShouldReturnUnauthorizedWhenInvalidToken() throws Exception {
+
+        String jsonBody = objectMapper.writeValueAsString(productDTO);
+
+        ResultActions result = mockMvc.perform(post("/products")
+                .header("Authorization", "Bearer " + invalidToken)
+                .content(jsonBody)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    public void deleteShouldReturnNoContentWhenIdExistsAndAdminLogged() throws Exception {
+
+        ResultActions result = mockMvc.perform(delete("/products/{id}", existingProductId)
+                .header("Authorization", "Bearer " + adminToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isNoContent());
+    }
+
+    @Test
+    public void deleteShouldReturnNotFoundWhenIdExistsAndAdminLogged() throws Exception {
+
+        ResultActions result = mockMvc.perform(delete("/products/{id}", nonExistingProductId)
+                .header("Authorization", "Bearer " + adminToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isNotFound());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.SUPPORTS)
+    public void deleteShouldReturnBadRequestWhenIdExistsAndAdminLogged() throws Exception {
+
+        ResultActions result = mockMvc.perform(delete("/products/{id}", dependentProductId)
+                .header("Authorization", "Bearer " + adminToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void deleteShouldReturnForbiddenWhenIdExistsAndClientLogged() throws Exception {
+
+        ResultActions result = mockMvc.perform(delete("/products/{id}", existingProductId)
+                .header("Authorization", "Bearer " + clientToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isForbidden());
+    }
+
+    @Test
+    public void deleteShouldReturnUnauthorizedWhenIdExistsAndInvalidToken() throws Exception {
+
+        ResultActions result = mockMvc.perform(delete("/products/{id}", existingProductId)
+                .header("Authorization", "Bearer " + invalidToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isUnauthorized());
     }
 }
