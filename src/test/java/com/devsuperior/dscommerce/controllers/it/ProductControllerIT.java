@@ -279,4 +279,14 @@ public class ProductControllerIT {
 
         result.andExpect(status().isUnauthorized());
     }
+
+    @Test
+    public void findByIdShouldReturnProductWhenIdExistsAndAdminLogged() throws Exception {
+
+        ResultActions result = mockMvc.perform(get("/products/{id}", existingProductId)
+                .header("Authorization", "Bearer " + adminToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isOk());
+    }
 }
