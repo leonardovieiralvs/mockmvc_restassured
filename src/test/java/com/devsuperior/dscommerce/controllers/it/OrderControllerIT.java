@@ -76,7 +76,65 @@ public class OrderControllerIT {
                 .accept(MediaType.APPLICATION_JSON));
 
         result.andExpect(status().isOk());
-        result.andExpect(jsonPath("$.client.id").value(existingOrderId));
-        result.andExpect(jsonPath("$.client.name").value("Maria Brown"));
+        result.andExpect(jsonPath("$.client").exists());
+        result.andExpect(jsonPath("$.id").value(existingOrderId));
+        result.andExpect(jsonPath("$.items").exists());
+        result.andExpect(jsonPath("$.items[0].imgUrl").value("https://raw.githubusercontent.com/devsuperior/dscatalog-resources/master/backend/img/1-big.jpg"));
+    }
+
+    @Test
+    public void findByIdShouldReturnOrderDTOWhenIdExistsAndClientLogged() throws Exception {
+
+        ResultActions result = mockMvc.perform(get("/orders/{id}", existingOrderId)
+                .header("Authorization", "Bearer " + clientToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isOk());
+        result.andExpect(jsonPath("$.client").exists());
+        result.andExpect(jsonPath("$.id").value(existingOrderId));
+        result.andExpect(jsonPath("$.items").exists());
+        result.andExpect(jsonPath("$.items[0].imgUrl").value("https://raw.githubusercontent.com/devsuperior/dscatalog-resources/master/backend/img/1-big.jpg"));
+    }
+
+    @Test
+    public void findByIdShouldReturnForbiddenOWhenIdExistsAndClientLoggedAndOrderDoesNotBelongUser() throws Exception {
+
+        Long otherOrderId = 2L;
+
+        ResultActions result = mockMvc.perform(get("/orders/{id}", otherOrderId)
+                .header("Authorization", "Bearer " + clientToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isForbidden());
+    }
+
+    @Test
+    public void findByIdShouldReturnNotFoundWhenIdNotExistsAndAdminLogged() throws Exception {
+
+        ResultActions result = mockMvc.perform(get("/orders/{id}", nonExistingOrderId)
+                .header("Authorization", "Bearer " + adminToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isNotFound());
+    }
+
+    @Test
+    public void findByIdShouldReturnNotFoundWhenIdNotExistsAndClientLogged() throws Exception {
+
+        ResultActions result = mockMvc.perform(get("/orders/{id}", nonExistingOrderId)
+                .header("Authorization", "Bearer " + clientToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isNotFound());
+    }
+
+    @Test
+    public void findByIdShouldReturnUnauthorizedWhenIdExistsAndInvalidToken() throws Exception {
+
+        ResultActions result = mockMvc.perform(get("/orders/{id}", existingOrderId)
+                .header("Authorization", "Bearer " + invalidToken)
+                .accept(MediaType.APPLICATION_JSON));
+
+        result.andExpect(status().isUnauthorized());
     }
 }
